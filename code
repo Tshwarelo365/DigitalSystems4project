@@ -1,0 +1,178 @@
+#include <WiFi.h>
+#include <LiquidCrystal_I2C.h>
+#include <NewPing.h>
+#include <Keypad.h>
+
+#define PIR_SENSOR 13
+#define ULTRASONIC_TRIGGER 12
+#define ULTRASONIC_ECHO 14
+#define RED_LED 27
+#define GREEN_LED 26
+#define YELLOW_LED 25
+
+#define PASSWORD_LENGTH 4
+#define MAX_TRIES 3
+#define TRY_INTERVAL 60000
+
+NewPing ultrasonicSensor(ULTRASONIC_TRIGGER, ULTRASONIC_ECHO, 400);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROW_COUNT, COL_COUNT);
+
+int password[PASSWORD_LENGTH] = { '1', '2', '3', '4' };
+int passcode[PASSWORD_LENGTH];
+int passcodeIndex = 0;
+int tries = 0;
+unsigned long lastTryTime = 0;
+
+const byte rowPins[ROW_COUNT] = { 32, 33, 34, 35 };
+const byte colPins[COL_COUNT] = { 36, 37, 38, 39, 40 };
+
+char keys[ROW_COUNT][COL_COUNT] = {
+  {'1', '2', '3', 'A', 'B'},
+  {'4', '5', '6', 'C', 'D'},
+  {'7', '8', '9', 'E', 'F'},
+  {'*', '0', '#', 'G', 'H'}
+};
+
+void setup() {
+  pinMode(PIR_SENSOR, INPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready");
+
+  delay(1000);
+}
+
+void loop() {
+  if (isPasswordMode()) {
+    checkPassword();
+  } else {
+    checkPIR();
+    checkUltrasonic();
+  }
+}
+
+void checkPIR() {
+  if (digitalRead(PIR_SENSOR)) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Motion detected");
+    digitalWrite(GREEN_LED, HIGH);
+    delay(500);
+    digitalWrite(GREEN_LED, LOW);
+    delay(500);
+  }
+}
+
+void checkUltrasonic() {
+  int distance = ultrasonicSensor.ping_cm();
+  if (distance < 100) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Object close");
+    digitalWrite(RED_LED, HIGH);
+    delay(500);
+    digitalWrite(RED_LED, LOW);
+    delay(500);
+  }
+}
+
+void checkPassword() {
+  if (millis() - lastTryTime > TRY_INTERVAL) {
+    tries = 0;
+    lastTryTime = millis();
+  }
+
+  char key = keypad.getKey();
+  if (key) {
+    if (key == 'A') {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Enter password");
+      digitalWrite(YELLOW_LED, HIGH);
+      passcodeIndex = 0;
+      return;
+    }
+
+    if(passcodeIndex < PASSWORD_LENGTH) {
+      passcode[passcodeIndex] = key;
+      passcodeIndex++;
+      lcd.print("*");
+    }
+
+    if (passcodeIndex == PASSWORD_LENGTH) {
+      if (validatePassword()) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Password correct");
+        digitalWrite(GREEN_LED, HIGH);
+        digitalWrite(YELLOW_LED, LOW);
+        while (true) {
+          char key = keypad.getKey();
+          if (key == 'A') {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Sensors disabled");
+            digitalWrite(GREEN_LED, LOW);
+            digitalWrite(RED_LED, LOW);
+            digitalWrite(YELLOW_LED, LOW);
+            break;
+          } else if (key == 'B') {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Sensors enabled");
+            digitalWrite(GREEN_LED, HIGH);
+            digitalWrite(RED_LED, HIGH);
+            digitalWrite(YELLOW_LED, LOW);
+            break;
+          }
+        }
+      } else {
+        tries++;
+        if (tries >= MAX_TRIES) {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Too many tries");
+          digitalWrite(RED_LED, HIGH);
+          digitalWrite(YELLOW_LED, LOW);
+          delay(1000);
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Ready");
+          tries = 0;
+        } else {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Incorrect password");
+          digitalWrite(RED_LED, HIGH);
+          digitalWrite(YELLOW_LED, LOW);
+          delay(1000);
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Enter password");
+          digitalWrite(YELLOW_LED, HIGH);
+          passcodeIndex = 0;
+        }
+      }
+    }
+  }
+}
+
+bool validatePassword() {
+  for (int i = 0; i < PASSWORD_LENGTH; i++) {
+    if (password[i] != passcode[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isPasswordMode() {
+  return digitalRead(YELLOW_LED);
+}
