@@ -1,0 +1,100 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Keypad.h>
+
+#define PIR_PIN 26
+#define ULTRASONIC_TRIGGER_PIN 14
+#define ULTRASONIC_ECHO_PIN 12
+#define GREEN_LED 4
+#define RED_LED 25
+
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 16, 2);
+
+float distance_cm, distance_m;
+unsigned long duration_us; // Declare duration_us here
+bool sensorsBlocked = false;
+
+// Define keypad matrix
+const byte ROWS = 4;
+const byte COLS = 4;
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+byte rowPins[ROWS] = {19, 18, 5, 17}; // Connect to the row pinouts of the keypad
+byte colPins[COLS] = {16, 32, 2, 15}; // Connect to the column pinouts of the keypad
+
+// Create the Keypad object (outside of setup)
+Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
+
+void setup() {
+  Serial.begin(9600); // Initialize serial communication
+  pinMode(PIR_PIN, INPUT);
+  pinMode(ULTRASONIC_TRIGGER_PIN, OUTPUT);
+  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  
+  lcd.begin(16 ,2);
+  lcd.init();                      // Initialize the LCD
+  lcd.backlight();                 // Turn on backlight
+  lcd.print("Welcome!");          
+
+  delay(1000);
+  lcd.clear();
+}
+
+void loop() {
+  // Check if sensors are blocked
+  if (!sensorsBlocked) {
+    // Motion detection with PIR sensor
+    if (digitalRead(PIR_PIN) == HIGH) {
+      digitalWrite(RED_LED, HIGH);
+      delay(500);
+      digitalWrite(RED_LED, LOW);
+      lcd.setCursor(0, 0);
+      lcd.print("Motion Detected ");
+    } else {
+      digitalWrite(RED_LED, LOW);
+      lcd.setCursor(0, 0);
+      lcd.print("No Motion       ");
+    }
+
+    // Distance measurement with ultrasonic sensor
+    digitalWrite(ULTRASONIC_TRIGGER_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(ULTRASONIC_TRIGGER_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(ULTRASONIC_TRIGGER_PIN, LOW);
+    duration_us = pulseIn(ULTRASONIC_ECHO_PIN, HIGH);
+    distance_cm = 0.017 * duration_us;
+    distance_m = distance_cm / 100;
+
+    if (distance_m < 1) {
+      digitalWrite(GREEN_LED, HIGH);
+      delay(500);
+      lcd.setCursor(0, 1);
+      lcd.print("Object close   "); // Print label
+    } else {
+      digitalWrite(GREEN_LED, LOW);
+    }
+  } else {
+    // Sensors are blocked, clear the screen
+    lcd.clear();
+    delay(30000); // Wait for 30 seconds
+    sensorsBlocked = false; // Unblock the sensors
+  }
+
+  // Check for keypad input
+  char key = keypad.getKey();
+  if (key == 'A') {
+    sensorsBlocked = true; // Block the sensors
+  }
+
+  delay(100); // Adjust delay for keypad responsiveness
+}
+
+
