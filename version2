@@ -7,13 +7,12 @@
 #define ULTRASONIC_ECHO_PIN 23
 #define GREEN_LED 18
 #define RED_LED 5
-#define LCD_RED 39
-# define LCD_GREEN 36
+
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 16, 2);
 
-float distance_cm, distance_m;
+float distance_cm, distance_m, length;
 unsigned long duration_us; // Declare duration_us here
 bool sensorsBlocked = false;
 
@@ -42,8 +41,7 @@ void setup() {
   pinMode(ULTRASONIC_ECHO_PIN, INPUT);
   pinMode(GREEN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
-  pinMode(LCD_RED, OUTPUT);
-  pinMode(LCD_GREEN, OUTPUT);
+  
   
   
   lcd.begin(16,2);
@@ -54,9 +52,11 @@ void setup() {
     lcd.clear();                    // Clear the display
     lcd.setCursor(0, 0);            // Set cursor to the beginning of the first line
     lcd.print(longText.substring(i, (size_t)min((int)(i + 16), (int)longText.length()))); // Print a substring of longText
+    lcd.setCursor(0, 1); 
+    lcd.print("Loading...");
     delay(500);                     // Adjust delay for desired scrolling speed
   }
-  delay(1000);
+  delay(500);
   lcd.clear();
 }
 
@@ -65,38 +65,38 @@ void loop() {
   if (!sensorsBlocked) {
     // Motion detection with PIR sensor
     if ( isMotionDetected()) {
-      digitalWrite(RED_LED, HIGH);
-      delay(500);
-      digitalWrite(RED_LED, LOW);
+      blinkLed(RED_LED,2);
+      
       lcd.setCursor(0, 0);
-      lcd.print("Motion Detected ");
-      delay(500);
+      lcd.print("Motion Detected!!!");
+      
+      
     } else {
       digitalWrite(RED_LED, LOW);
+      
       lcd.setCursor(0, 0);
-      lcd.print("     ");
+      lcd.print("No motion detected");
+      delay(1000);
     }
 
     // Distance measurement with ultrasonic sensor
-    digitalWrite(ULTRASONIC_TRIGGER_PIN, LOW);
-    delayMicroseconds(2);
-    digitalWrite(ULTRASONIC_TRIGGER_PIN, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(ULTRASONIC_TRIGGER_PIN, LOW);
-    duration_us = pulseIn(ULTRASONIC_ECHO_PIN, HIGH);
-    distance_cm = 0.017 * duration_us;
-    distance_m = distance_cm / 100;
+    ;
 
-    if (distance_m < 1) {
+    if (distanceMeasurement() < 100) {
       digitalWrite(GREEN_LED, HIGH);
       delay(500);
       lcd.setCursor(0, 1);
-      lcd.print("Object too close "); // Print label
+      lcd.print("Object close!!!"); // Print label
 
     } else {
       
       digitalWrite(GREEN_LED, LOW);
-      lcd.clear();
+      
+      lcd.setCursor(0, 1);
+      lcd.print("No object close");
+      
+      delay(500);
+      
     }
   } else {
     // Sensors are blocked, clear the screen
@@ -118,7 +118,7 @@ void loop() {
 void passwordEntry() {
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Enter 4-digit PIN");
+  lcd.print("Enter PIN (4): ");
   enteredPIN = "";
   wrongAttempts = 0;
 
@@ -131,9 +131,9 @@ void passwordEntry() {
           lcd.setCursor(0, 0);
           lcd.print("PIN correct");
           lcd.setCursor(0, 1);
-          lcd.print("User is in the system");
-          delay(1000);
-          digitalWrite(LCD_GREEN, HIGH);
+          lcd.print("User in the system");
+          delay(2000);
+          digitalWrite(GREEN_LED, HIGH);
           
           showMainMenu();
           mainMenuSelection();
@@ -153,40 +153,29 @@ void passwordEntry() {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("Attempts Exceeded");
-            digitalWrite(GREEN_LED, LOW);
-            digitalWrite(LCD_RED, HIGH);
-            delay(500);
-            digitalWrite(LCD_RED, LOW);
-            delay(500);
-            digitalWrite(LCD_RED, HIGH);
-            delay(500);
-            digitalWrite(LCD_RED, LOW);
-            delay(500);
-            digitalWrite(LCD_RED, HIGH);
-            delay(500);
-            digitalWrite(LCD_RED, LOW);
-            
+            delay(1000);
+            lcd.print("SYSTEM BREACHED GOING");
+            lcd.setCursor(0, 1);
+            lcd.print("BACK TO DEFAULT!!!");
             lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Default state");
-            delay(600);
+            delay(1000);
+            digitalWrite(GREEN_LED, LOW);
+            blinkLed(RED_LED, 7);
+            
+            delay(1000);
             sensorsBlocked = false; // Unblock the sensors
             break;
           } else {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("PIN incorrect");
-            digitalWrite(GREEN_LED, LOW);
-            digitalWrite(LCD_RED, HIGH);
-            delay(500);
-            digitalWrite(LCD_RED, LOW);
-            delay(2000);
+            blinkLed(RED_LED,3);
             // Reset PIN entry
             enteredPIN = "";
             // Display initial message
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Enter 4-digit PIN");
+            lcd.print("Enter PIN (4): ");
           }
         }
       } else if( key == 'C') {
@@ -215,6 +204,8 @@ int distanceMeasurement() {
   digitalWrite(ULTRASONIC_TRIGGER_PIN, LOW);
   duration_us = pulseIn(ULTRASONIC_ECHO_PIN, HIGH);
   distance_cm = 0.017 * duration_us;
+  
+  
   return distance_cm;
 }
 
@@ -268,7 +259,9 @@ void enterSecretPIN() {
   // Display initial message
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Welcome!");
+  lcd.print("Logging out. Log");
+  lcd.setCursor(0, 1);
+  lcd.print("in with new PIN");
 }
 
 void showMainMenu() {
@@ -308,12 +301,21 @@ void mainMenuSelection() {
       // Check distance
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Distance (cm):");
+      lcd.print("Distance in (cm):");
       distance = distanceMeasurement(); // Assign value here
+      
       lcd.setCursor(0, 1);
       lcd.print(distance);
       delay(3000);
       break;
+    case 'C':
+      sensorsBlocked = false; // Unblock the sensors
+      break;
+
+    case 'A':
+      enterSecretPIN();
+      break;
+
     default:
       // Invalid selection
       lcd.clear();
